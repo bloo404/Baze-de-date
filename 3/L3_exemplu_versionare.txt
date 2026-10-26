@@ -1,0 +1,74 @@
+CREATE TABLE versionTable(
+	version INT
+)
+
+INSERT INTO versionTable
+VALUES 
+	(1) -- initial
+
+-- initial version, version after execution & procedure that changes the table
+CREATE TABLE procedureTable(
+	initial_version INT,
+	final_version INT,
+	procedure_name VARCHAR(MAX),
+	PRIMARY KEY (initial_version, final_version)
+)
+
+INSERT INTO procedureTable
+VALUES
+	(1, 2, 'doProcedure1'),
+	(2, 1, 'undoProcedure1'),
+	(2, 3, 'doProcedure2'), 
+	(3, 2, 'undoProcedure2'),
+	(3, 4, 'doProcedure3'),
+	(4, 3, 'undoProcedure3'),
+	(4, 5, 'doProcedure4'),
+	(5, 4, 'undoProcedure4'),
+	(5, 6, 'doProcedure5'),
+	(6, 5, 'undoProcedure5'),
+
+-- procedure for changing versions
+GO
+
+CREATE PROCEDURE goToVersion(@newVersion INT)
+AS
+	DECLARE @current_version INT
+	DECLARE @procedureName VARCHAR(MAX)
+	SELECT @current_version = version FROM versionTable
+
+	IF (@newVersion > (SELECT MAX(final_version) FROM procedureTable) OR @newVersion < 1)
+		RAISERROR ('Bad version', 10, 1)
+	ELSE
+	BEGIN
+		IF @newVersion = @current_version
+			PRINT('You are already on this version!');
+		ELSE
+		BEGIN
+			IF @current_version > @newVersion
+			BEGIN
+						WHILE @current_version > @newVersion 
+					BEGIN
+						SELECT @procedureName = procedure_name FROM procedureTable WHERE initial_version = @current_version AND final_version = @current_version-1
+						PRINT('Executing ' + @procedureName);
+						EXEC (@procedureName)
+						SET @current_version = @current_version - 1
+					END
+			END
+
+			IF @current_version < @newVersion
+			BEGIN
+				WHILE @current_version < @newVersion 
+					BEGIN
+						SELECT @procedureName = procedure_name FROM procedureTable WHERE initial_version = @current_version AND final_version = @current_version+1
+						PRINT('Executing ' + @procedureName);
+						EXEC (@procedureName)
+						SET @current_version = @current_version + 1
+					END
+			END
+
+			UPDATE versionTable SET version = @newVersion
+		END
+	END
+go 
+
+EXEC goToVersion 1
